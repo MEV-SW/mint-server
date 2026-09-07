@@ -1,0 +1,12 @@
+name: 경량 작업
+description: L1·S1·1~2일 — 게이트 없이 바로 착수. 세 질문 하나라도 "아니오"면 기능요청서로.
+labels: [light]
+body:
+  - type: textarea
+    id: what
+    attributes: { label: 뭘 / 언제까지 }
+    validations: { required: true }
+  - type: textarea
+    id: done
+    attributes: { label: 완료 판정 기준 }
+    validations: { required: true }
