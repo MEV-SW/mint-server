@@ -1,0 +1,29 @@
+name: 기능요청서
+description: 카드 1장 — 게이트(인터페이스 정의 → 기술스펙) 통과 후 구현
+labels: [needs-spec]
+body:
+  - type: textarea
+    id: what
+    attributes: { label: 만들 기능, description: 리포·기능 한 문장 + 사용자가 무엇을 할 수 있어야 하는지 }
+    validations: { required: true }
+  - type: textarea
+    id: why
+    attributes: { label: 요청 배경, description: "왜 필요한가. 원문 출처: team-tasks#NN / CS / 고객사" }
+    validations: { required: true }
+  - type: textarea
+    id: not
+    attributes: { label: 안 만들 것 목록 }
+  - type: textarea
+    id: done
+    attributes: { label: 완료 판정 기준, description: 검증 가능한 문장 }
+    validations: { required: true }
+  - type: input
+    id: due
+    attributes: { label: 목표 일정, placeholder: YYYY-MM-DD }
+  - type: input
+    id: design
+    attributes: { label: 디자인 경로, placeholder: 해당 없음 / Figma 필요 }
+  - type: input
+    id: level
+    attributes: { label: 난이도, placeholder: "L1 (근거) / S1 (근거)" }
+    validations: { required: true }
