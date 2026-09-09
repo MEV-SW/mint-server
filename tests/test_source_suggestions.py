@@ -1,7 +1,18 @@
 import unittest
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.core.database import Base
+from app.core.exceptions import ConflictError, NotFoundError
+import app.models  # noqa: F401 — register all tables
+from app.models.enums import AccountApprovalStatus, DiscoveryType, UserRole
+from app.models.organization import Organization
+from app.models.personalization import NewsCategory
+from app.models.user import User
+from app.schemas.source import SourceApproveRequest
 from app.services.llm_client import MockLLMClient
-from app.services.source_service import filter_suggested_candidates
+from app.services.source_service import SourceService, filter_suggested_candidates
 
 
 class MockLLMSuggestSourcesTest(unittest.TestCase):
@@ -65,6 +76,70 @@ class FilterSuggestedCandidatesTest(unittest.TestCase):
         result = filter_suggested_candidates(raw, existing_urls=[])
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].url, "https://good.example/rss")
+
+
+class ApproveSuggestionTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.engine = create_engine(
+            "sqlite:///:memory:",
+            execution_options={"schema_translate_map": {"mint": None}},
+        )
+        Base.metadata.create_all(self.engine)
+        self.db = sessionmaker(bind=self.engine)()
+        org = Organization(name="Test", industry="EV")
+        self.db.add(org)
+        self.db.flush()
+        self.admin = User(
+            organization_id=org.id,
+            email="admin@example.com",
+            password_hash="x",
+            name="관리자",
+            role=UserRole.admin,
+            approval_status=AccountApprovalStatus.approved,
+            is_active=True,
+        )
+        self.category = NewsCategory(
+            organization_id=org.id,
+            name="충전 인프라",
+            normalized_name="충전 인프라",
+        )
+        self.db.add_all([self.admin, self.category])
+        self.db.commit()
+        self.org_id = org.id
+        self.service = SourceService(self.db)
+
+    def tearDown(self) -> None:
+        self.db.close()
+        self.engine.dispose()
+
+    def _request(self, url: str = "https://good.example/rss") -> SourceApproveRequest:
+        return SourceApproveRequest(name="좋은 소스", url=url, source_type="rss", reason="관련 매체")
+
+    def test_approve_creates_source_with_ai_discovered_metadata(self) -> None:
+        result = self.service.approve_suggestion(self.org_id, self.category.id, self.admin.id, self._request())
+        self.assertEqual(result.discovery_type, DiscoveryType.ai_discovered)
+        self.assertEqual(result.approved_by, self.admin.id)
+        self.assertIsNotNone(result.approved_at)
+        self.assertEqual(result.category_id, self.category.id)
+        self.assertEqual(result.category, "충전 인프라")
+
+    def test_approve_rejects_duplicate_url(self) -> None:
+        self.service.approve_suggestion(self.org_id, self.category.id, self.admin.id, self._request())
+        with self.assertRaises(ConflictError):
+            self.service.approve_suggestion(self.org_id, self.category.id, self.admin.id, self._request())
+
+    def test_approve_rejects_inactive_category(self) -> None:
+        self.category.is_active = False
+        self.db.commit()
+        with self.assertRaises(NotFoundError):
+            self.service.approve_suggestion(self.org_id, self.category.id, self.admin.id, self._request())
+
+    def test_approve_rejects_other_org_category(self) -> None:
+        other_org = Organization(name="Other", industry="EV")
+        self.db.add(other_org)
+        self.db.commit()
+        with self.assertRaises(NotFoundError):
+            self.service.approve_suggestion(other_org.id, self.category.id, self.admin.id, self._request())
 
 
 if __name__ == "__main__":

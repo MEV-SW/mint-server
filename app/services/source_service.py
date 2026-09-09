@@ -1,14 +1,21 @@
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import BadRequestError, NotFoundError
-from app.models.enums import SourceType, TrustLevel
+from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
+from app.models.enums import DiscoveryType, SourceType, TrustLevel
 from app.models.personalization import NewsCategory
 from app.models.source import Source
-from app.schemas.source import SourceCreate, SourceRead, SourceSuggestionCandidate, SourceUpdate
+from app.schemas.source import (
+    SourceApproveRequest,
+    SourceCreate,
+    SourceRead,
+    SourceSuggestionCandidate,
+    SourceUpdate,
+)
 from app.services.community_sources import is_community_source_type
 from app.services.edition_service import EditionService
 
@@ -136,10 +143,43 @@ class SourceService:
             ).all()
         )
 
+    def approve_suggestion(
+        self, organization_id: UUID, category_id: UUID, admin_id: UUID, data: SourceApproveRequest
+    ) -> SourceRead:
+        category = self._get_usable_category(organization_id, category_id)
+        dup = self.db.scalar(
+            select(Source).where(
+                Source.organization_id == organization_id,
+                Source.url == data.url,
+                Source.is_active.is_(True),
+            )
+        )
+        if dup:
+            raise ConflictError("이미 등록된 소스 URL입니다.")
+        source = Source(
+            organization_id=organization_id,
+            name=data.name,
+            url=data.url,
+            source_type=data.source_type,
+            category=category.name,
+            category_id=category.id,
+            discovery_type=DiscoveryType.ai_discovered,
+            approved_by=admin_id,
+            approved_at=datetime.now(timezone.utc),
+        )
+        self.db.add(source)
+        self.db.commit()
+        self.db.refresh(source)
+        return self._to_read(source)
+
     def _assert_category_usable(self, organization_id: UUID, category_id: UUID) -> None:
+        self._get_usable_category(organization_id, category_id)
+
+    def _get_usable_category(self, organization_id: UUID, category_id: UUID) -> NewsCategory:
         category = self.db.get(NewsCategory, category_id)
         if not category or category.organization_id != organization_id or not category.is_active:
             raise NotFoundError("Category not found")
+        return category
 
     def _get_or_404(self, source_id: UUID, organization_id: UUID) -> Source:
         source = self.db.get(Source, source_id)
