@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import delete, exists, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.exceptions import BadRequestError, NotFoundError
+from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.core.config import get_settings
 from app.models.ai_output import AIOutput
 from app.models.enums import (
@@ -380,6 +380,45 @@ class TaxonomyService:
             for row in rows
             if row.edition_id is None or row.edition_id in edition_ids
         ]
+
+    def update_category(
+        self, category_id: UUID, organization_id: UUID, *, name: str | None, sort_order: int | None, is_active: bool | None
+    ) -> NewsCategory:
+        row = self.db.get(NewsCategory, category_id)
+        if not row or row.organization_id != organization_id:
+            raise NotFoundError("Category not found")
+        if name is not None:
+            normalized = normalize_keyword(name)
+            dup = self.db.scalar(
+                select(NewsCategory).where(
+                    NewsCategory.organization_id == organization_id,
+                    NewsCategory.normalized_name == normalized,
+                    NewsCategory.id != category_id,
+                )
+            )
+            if dup:
+                raise ConflictError("이미 존재하는 카테고리 이름입니다.")
+            row.name = name.strip()
+            row.normalized_name = normalized
+        if sort_order is not None:
+            row.sort_order = sort_order
+        if is_active is not None:
+            row.is_active = is_active
+        self.db.commit()
+        self.db.refresh(row)
+        return row
+
+    def deactivate_category(self, category_id: UUID, organization_id: UUID) -> None:
+        row = self.db.get(NewsCategory, category_id)
+        if not row or row.organization_id != organization_id:
+            raise NotFoundError("Category not found")
+        in_use = self.db.scalar(
+            select(exists().where(Source.category_id == category_id, Source.is_active.is_(True)))
+        )
+        if in_use:
+            raise ConflictError("이 카테고리를 참조하는 활성 소스가 있어 비활성화할 수 없습니다.")
+        row.is_active = False
+        self.db.commit()
 
     def sync_discovered_categories(self, organization_id: UUID) -> int:
         """Import distinct post.category values into news_categories."""

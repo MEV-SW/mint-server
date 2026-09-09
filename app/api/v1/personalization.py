@@ -17,6 +17,7 @@ from app.schemas.job import JobRead
 from app.schemas.personalization import (
     CategoryRead,
     CategorySubscriptionUpdate,
+    CategoryUpdate,
     CategoryWrite,
     FeaturedCategoriesUpdate,
     KeywordCreate,
@@ -168,6 +169,33 @@ def create_category(
     db.commit()
     db.refresh(row)
     return row
+
+
+@router.patch("/categories/{category_id}", response_model=CategoryRead)
+def update_category(
+    category_id: UUID,
+    data: CategoryUpdate,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    values = data.model_dump(exclude_unset=True)
+    row = TaxonomyService(db).update_category(
+        category_id,
+        user.organization_id,
+        name=values.get("name"),
+        sort_order=values.get("sort_order"),
+        is_active=values.get("is_active"),
+    )
+    return row
+
+
+@router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_category(
+    category_id: UUID,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    TaxonomyService(db).deactivate_category(category_id, user.organization_id)
 
 
 @router.get("/keywords", response_model=list[KeywordRead])
