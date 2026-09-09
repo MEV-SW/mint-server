@@ -1,3 +1,4 @@
+from urllib.parse import urlparse
 from uuid import UUID
 
 from sqlalchemy import select
@@ -7,9 +8,33 @@ from app.core.exceptions import BadRequestError, NotFoundError
 from app.models.enums import SourceType, TrustLevel
 from app.models.personalization import NewsCategory
 from app.models.source import Source
-from app.schemas.source import SourceCreate, SourceRead, SourceUpdate
+from app.schemas.source import SourceCreate, SourceRead, SourceSuggestionCandidate, SourceUpdate
 from app.services.community_sources import is_community_source_type
 from app.services.edition_service import EditionService
+
+
+def filter_suggested_candidates(
+    raw_candidates: list[dict], existing_urls: list[str]
+) -> list["SourceSuggestionCandidate"]:
+    """Keep only well-formed, non-duplicate source suggestions.
+
+    Drops candidates that fail schema validation, don't have an http(s) URL,
+    or exactly match an already-registered active source URL.
+    """
+    existing = set(existing_urls)
+    filtered: list[SourceSuggestionCandidate] = []
+    for item in raw_candidates:
+        try:
+            candidate = SourceSuggestionCandidate.model_validate(item)
+        except Exception:
+            continue
+        parsed = urlparse(candidate.url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            continue
+        if candidate.url in existing:
+            continue
+        filtered.append(candidate)
+    return filtered
 
 
 def _apply_community_defaults(data: dict) -> dict:
@@ -100,6 +125,16 @@ class SourceService:
         source = self._get_or_404(source_id, organization_id)
         self.db.delete(source)
         self.db.commit()
+
+    def active_urls(self, organization_id: UUID) -> list[str]:
+        return list(
+            self.db.scalars(
+                select(Source.url).where(
+                    Source.organization_id == organization_id,
+                    Source.is_active.is_(True),
+                )
+            ).all()
+        )
 
     def _assert_category_usable(self, organization_id: UUID, category_id: UUID) -> None:
         category = self.db.get(NewsCategory, category_id)
