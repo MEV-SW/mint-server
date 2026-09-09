@@ -78,6 +78,13 @@ def run_migrations_online() -> None:
     )
     with connectable.connect() as connection:
         _prepare_connection(connection)
+        # SQLAlchemy 2.x autobegins a transaction on the first statement above
+        # (CREATE SCHEMA / SET search_path). Without an explicit commit here,
+        # context.begin_transaction() below nests inside that open transaction
+        # as a SAVEPOINT instead of the real transaction, so closing the
+        # connection afterwards implicitly rolls everything back — migrations
+        # (and `alembic stamp`) silently report success but write nothing.
+        connection.commit()
         context.configure(connection=connection, **_configure())
         with context.begin_transaction():
             context.run_migrations()
