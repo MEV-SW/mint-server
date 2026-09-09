@@ -3,4 +3,4 @@
 | 카드 | 기능 | 릴리즈 | 상태 | 문서 |
 |---|---|---|---|---|
 | [#13](https://github.com/MEV-SW/mint-server/issues/13) | 카테고리소스스키마 | 2026-11 | 완료 | [API스펙](13-카테고리소스스키마/API스펙_카테고리소스스키마.md) · [기술스펙](13-카테고리소스스키마/기술스펙_카테고리소스스키마.md) |
-| [#14](https://github.com/MEV-SW/mint-server/issues/14) | AI소스제안 | 2026-11 | 인터페이스 정의 초안 | [API스펙_AI소스제안](14-ai소스제안/API스펙_AI소스제안.md) |
+| [#14](https://github.com/MEV-SW/mint-server/issues/14) | AI소스제안 | 2026-11 | 스펙 작성 중 | [API스펙](14-ai소스제안/API스펙_AI소스제안.md) · [기술스펙](14-ai소스제안/기술스펙_AI소스제안.md) |
