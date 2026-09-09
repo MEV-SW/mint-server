@@ -49,7 +49,7 @@ from app.models.personalization import NewsCategory
 from app.models.personalization import Keyword, PostKeyword, UserKeywordSubscription
 from app.models.post import Post
 from app.models.source import Source
-from app.schemas.source import SourceSuggestRequest, SourceSuggestResponse
+from app.schemas.source import SourceApproveRequest, SourceRead, SourceSuggestRequest, SourceSuggestResponse
 
 router = APIRouter()
 
@@ -229,6 +229,18 @@ def suggest_category_sources(
         candidates=filter_suggested_candidates(raw_candidates, existing_urls),
         generated_at=datetime.now(timezone.utc),
     )
+
+
+@router.post("/categories/{category_id}/source-suggestions/approve", response_model=SourceRead)
+def approve_category_source_suggestion(
+    category_id: UUID,
+    data: SourceApproveRequest,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from app.services.source_service import SourceService
+
+    return SourceService(db).approve_suggestion(user.organization_id, category_id, user.id, data)
 
 
 @router.get("/keywords", response_model=list[KeywordRead])

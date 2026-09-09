@@ -58,6 +58,8 @@ class SourceRead(ORMBase):
     crawl_frequency: str
     last_crawled_at: datetime | None
     is_active: bool
+    approved_by: UUID | None = None
+    approved_at: datetime | None = None
     edition_ids: list[UUID] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
@@ -78,6 +80,13 @@ class SourceSuggestResponse(BaseModel):
     category_id: UUID
     candidates: list[SourceSuggestionCandidate]
     generated_at: datetime
+
+
+class SourceApproveRequest(BaseModel):
+    name: str
+    url: str
+    source_type: SourceType
+    reason: str = ""
 
 
 class CrawlResult(BaseModel):
