@@ -17,6 +17,7 @@ class CategoryRead(ORMBase):
     id: UUID
     name: str
     sort_order: int
+    is_active: bool = True
     selected: bool = False
     is_featured: bool = True
     is_discovered: bool = False
@@ -37,6 +38,12 @@ class CategorySubscriptionUpdate(BaseModel):
 class CategoryWrite(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     sort_order: int = 0
+
+
+class CategoryUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    sort_order: int | None = None
+    is_active: bool | None = None
 
 
 class KeywordRead(ORMBase):

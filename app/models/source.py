@@ -22,6 +22,9 @@ class Source(Base):
     source_type: Mapped[SourceType] = mapped_column(str_enum(SourceType, "source_type"), default=SourceType.rss)
     industry: Mapped[str] = mapped_column(String(128), default="EV")
     category: Mapped[str] = mapped_column(String(128), default="general")
+    category_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("news_categories.id"), nullable=True
+    )
     trust_level: Mapped[TrustLevel] = mapped_column(str_enum(TrustLevel, "trust_level"), default=TrustLevel.high)
     reliability_score: Mapped[int] = mapped_column(Integer, default=80)
     discovery_type: Mapped[DiscoveryType] = mapped_column(

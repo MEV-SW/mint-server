@@ -22,9 +22,11 @@ from app.models.enums import (
     TrustLevel,
     UserRole,
 )
+from app.core.exceptions import ConflictError, NotFoundError
 from app.models.organization import Organization
-from app.models.personalization import Keyword, PostKeyword, ReviewQueueItem
+from app.models.personalization import Keyword, NewsCategory, PostKeyword, ReviewQueueItem
 from app.models.post import Post
+from app.models.source import Source
 from app.models.user import User
 from app.services.llm_client import MockLLMClient
 from app.services.personalization_service import (
@@ -398,6 +400,50 @@ class PersonalizationServiceTest(unittest.TestCase):
         self.assertGreaterEqual(created, 1)
         names = {row.name for row in self.taxonomy.list_categories(self.user.organization_id)}
         self.assertIn("인공지능", names)
+
+    def test_update_category_renames_and_reorders(self) -> None:
+        category = self.taxonomy.list_categories(self.user.organization_id)[0]
+        updated = self.taxonomy.update_category(
+            category.id, self.user.organization_id, name="새 이름", sort_order=9, is_active=None
+        )
+        self.assertEqual(updated.name, "새 이름")
+        self.assertEqual(updated.sort_order, 9)
+
+    def test_update_category_rejects_duplicate_name(self) -> None:
+        categories = self.taxonomy.list_categories(self.user.organization_id)
+        first, second = categories[0], categories[1]
+        with self.assertRaises(ConflictError):
+            self.taxonomy.update_category(
+                second.id, self.user.organization_id, name=first.name, sort_order=None, is_active=None
+            )
+
+    def test_update_category_rejects_other_org(self) -> None:
+        other_org = Organization(name="Other", industry="EV")
+        self.db.add(other_org)
+        self.db.commit()
+        category = self.taxonomy.list_categories(self.user.organization_id)[0]
+        with self.assertRaises(NotFoundError):
+            self.taxonomy.update_category(category.id, other_org.id, name="x", sort_order=None, is_active=None)
+
+    def test_deactivate_category_without_sources_succeeds(self) -> None:
+        category = self.taxonomy.list_categories(self.user.organization_id)[0]
+        self.taxonomy.deactivate_category(category.id, self.user.organization_id)
+        self.db.commit()
+        remaining = {row.id for row in self.taxonomy.list_categories(self.user.organization_id)}
+        self.assertNotIn(category.id, remaining)
+
+    def test_deactivate_category_with_active_source_is_rejected(self) -> None:
+        category = self.taxonomy.list_categories(self.user.organization_id)[0]
+        source = Source(
+            organization_id=self.user.organization_id,
+            name="테스트 소스",
+            url="https://example.com/feed",
+            category_id=category.id,
+        )
+        self.db.add(source)
+        self.db.commit()
+        with self.assertRaises(ConflictError):
+            self.taxonomy.deactivate_category(category.id, self.user.organization_id)
 
     def test_classify_creates_new_category(self) -> None:
         post = self._post()

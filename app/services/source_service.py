@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.models.enums import SourceType, TrustLevel
+from app.models.personalization import NewsCategory
 from app.models.source import Source
 from app.schemas.source import SourceCreate, SourceRead, SourceUpdate
 from app.services.community_sources import is_community_source_type
@@ -49,6 +50,8 @@ class SourceService:
         return self._to_read(source)
 
     def create_source(self, organization_id: UUID, data: SourceCreate) -> SourceRead:
+        if data.category_id is not None:
+            self._assert_category_usable(organization_id, data.category_id)
         payload = data.model_dump(exclude={"edition_ids"})
         if is_community_source_type(payload.get("source_type", SourceType.rss)):
             payload = _apply_community_defaults(payload)
@@ -64,6 +67,8 @@ class SourceService:
         source = self._get_or_404(source_id, organization_id)
         updates = data.model_dump(exclude_unset=True)
         edition_ids = updates.pop("edition_ids", ...)
+        if "category_id" in updates and updates["category_id"] is not None:
+            self._assert_category_usable(organization_id, updates["category_id"])
 
         if "source_type" in updates:
             was_community = is_community_source_type(source.source_type)
@@ -95,6 +100,11 @@ class SourceService:
         source = self._get_or_404(source_id, organization_id)
         self.db.delete(source)
         self.db.commit()
+
+    def _assert_category_usable(self, organization_id: UUID, category_id: UUID) -> None:
+        category = self.db.get(NewsCategory, category_id)
+        if not category or category.organization_id != organization_id or not category.is_active:
+            raise NotFoundError("Category not found")
 
     def _get_or_404(self, source_id: UUID, organization_id: UUID) -> Source:
         source = self.db.get(Source, source_id)

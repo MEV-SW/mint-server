@@ -13,6 +13,7 @@ class SourceBase(BaseModel):
     source_type: SourceType = SourceType.rss
     industry: str = "EV"
     category: str = "general"
+    category_id: UUID | None = None
     trust_level: TrustLevel = TrustLevel.high
     reliability_score: int = Field(default=80, ge=0, le=100)
     discovery_type: DiscoveryType = DiscoveryType.manual
@@ -32,6 +33,7 @@ class SourceUpdate(BaseModel):
     source_type: SourceType | None = None
     industry: str | None = None
     category: str | None = None
+    category_id: UUID | None = None
     trust_level: TrustLevel | None = None
     reliability_score: int | None = Field(default=None, ge=0, le=100)
     auto_publish: bool | None = None
@@ -48,6 +50,7 @@ class SourceRead(ORMBase):
     source_type: SourceType
     industry: str
     category: str
+    category_id: UUID | None
     trust_level: TrustLevel
     reliability_score: int
     discovery_type: DiscoveryType
