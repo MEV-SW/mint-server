@@ -63,6 +63,23 @@ class SourceRead(ORMBase):
     updated_at: datetime
 
 
+class SourceSuggestRequest(BaseModel):
+    count: int = Field(default=5, ge=1, le=10)
+
+
+class SourceSuggestionCandidate(BaseModel):
+    name: str
+    url: str
+    source_type: SourceType
+    reason: str
+
+
+class SourceSuggestResponse(BaseModel):
+    category_id: UUID
+    candidates: list[SourceSuggestionCandidate]
+    generated_at: datetime
+
+
 class CrawlResult(BaseModel):
     source_id: UUID
     created: int

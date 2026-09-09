@@ -26,6 +26,18 @@ def _story_scene_user(title: str, summary: str, body: str = "") -> str:
     )
 
 
+def _source_suggest_user(category_name: str, *, industry: str, count: int, existing_urls: list[str]) -> str:
+    return json.dumps(
+        {
+            "category": category_name,
+            "industry": industry,
+            "count": count,
+            "existing_urls": existing_urls[:100],
+        },
+        ensure_ascii=False,
+    )
+
+
 def _parse_json(text: str) -> dict:
     text = (text or "").strip()
     if not text:
@@ -94,6 +106,12 @@ class LLMClient(ABC):
 
     @abstractmethod
     def answer_question_general(self, question: str) -> str:
+        ...
+
+    @abstractmethod
+    def suggest_sources(
+        self, category_name: str, *, industry: str, count: int, existing_urls: list[str]
+    ) -> list[dict]:
         ...
 
 
@@ -225,6 +243,14 @@ class BedrockClient(LLMClient):
             string_fields=("summary", "impact", "category", "relevance_reason"),
             list_fields=("action_items",),
         )
+
+    def suggest_sources(
+        self, category_name: str, *, industry: str, count: int, existing_urls: list[str]
+    ) -> list[dict]:
+        system = _load_prompt("source_suggest_v1.md")
+        user = _source_suggest_user(category_name, industry=industry, count=count, existing_urls=existing_urls)
+        result = _parse_json(self._generate(self.summary_model, system, user, json_mode=True))
+        return result.get("candidates") or []
 
     def generate_daily_report(
         self, posts: list[dict], report_date: date, *, edition: dict | None = None
@@ -394,6 +420,14 @@ class GeminiClient(LLMClient):
             list_fields=("action_items",),
         )
 
+    def suggest_sources(
+        self, category_name: str, *, industry: str, count: int, existing_urls: list[str]
+    ) -> list[dict]:
+        system = _load_prompt("source_suggest_v1.md")
+        user = _source_suggest_user(category_name, industry=industry, count=count, existing_urls=existing_urls)
+        result = _parse_json(self._generate(self.summary_model, system, user, json_mode=True))
+        return result.get("candidates") or []
+
     def generate_daily_report(
         self, posts: list[dict], report_date: date, *, edition: dict | None = None
     ) -> dict:
@@ -552,6 +586,21 @@ class MockLLMClient(LLMClient):
             "category": classified.get("category", "기타"),
             "keywords": classified.get("keywords", []),
         }
+
+    def suggest_sources(
+        self, category_name: str, *, industry: str, count: int, existing_urls: list[str]
+    ) -> list[dict]:
+        candidates = [
+            {
+                "name": f"{category_name} 소식 {i + 1}",
+                "url": f"https://example-{category_name.lower().replace(' ', '-')}-{i + 1}.test/rss",
+                "source_type": "rss",
+                "reason": f"{category_name} 관련 공개 RSS 피드(모의 응답)",
+            }
+            for i in range(max(0, min(count, 10)))
+        ]
+        existing = set(existing_urls)
+        return [c for c in candidates if c["url"] not in existing]
 
     def generate_daily_report(
         self, posts: list[dict], report_date: date, *, edition: dict | None = None

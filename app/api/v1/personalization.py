@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response, status
@@ -9,7 +9,7 @@ from app.core.database import get_db
 from app.core.config import get_settings
 from app.core.permissions import require_admin, require_edition_editor_any
 from app.core.security import get_current_user
-from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
+from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError, ServiceUnavailableError
 from app.models.enums import Importance, JobType, KeywordMatchMethod, KeywordStatus, ReviewQueueStatus
 from app.models.user import User
 from app.services.membership_service import MembershipService, is_org_admin
@@ -49,6 +49,7 @@ from app.models.personalization import NewsCategory
 from app.models.personalization import Keyword, PostKeyword, UserKeywordSubscription
 from app.models.post import Post
 from app.models.source import Source
+from app.schemas.source import SourceSuggestRequest, SourceSuggestResponse
 
 router = APIRouter()
 
@@ -196,6 +197,38 @@ def delete_category(
     db: Session = Depends(get_db),
 ):
     TaxonomyService(db).deactivate_category(category_id, user.organization_id)
+
+
+@router.post("/categories/{category_id}/source-suggestions", response_model=SourceSuggestResponse)
+def suggest_category_sources(
+    category_id: UUID,
+    data: SourceSuggestRequest,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from app.services.llm_client import get_llm_client
+    from app.services.source_service import SourceService, filter_suggested_candidates
+
+    category = db.get(NewsCategory, category_id)
+    if not category or category.organization_id != user.organization_id or not category.is_active:
+        raise NotFoundError("Category not found")
+
+    existing_urls = SourceService(db).active_urls(user.organization_id)
+    try:
+        raw_candidates = get_llm_client().suggest_sources(
+            category.name,
+            industry="EV",
+            count=data.count,
+            existing_urls=existing_urls,
+        )
+    except Exception as exc:
+        raise ServiceUnavailableError("소스 제안을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.") from exc
+
+    return SourceSuggestResponse(
+        category_id=category_id,
+        candidates=filter_suggested_candidates(raw_candidates, existing_urls),
+        generated_at=datetime.now(timezone.utc),
+    )
 
 
 @router.get("/keywords", response_model=list[KeywordRead])
