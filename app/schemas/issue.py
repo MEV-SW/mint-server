@@ -91,3 +91,11 @@ class TrackingUpdateRequest(BaseModel):
 class TrackingUpdateResponse(BaseModel):
     issue_id: UUID
     tracking: bool
+
+
+class IssueMergeRequest(BaseModel):
+    merge_with: UUID
+
+
+class IssueSplitRequest(BaseModel):
+    post_id: UUID

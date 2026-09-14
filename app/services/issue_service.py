@@ -2,10 +2,10 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import BadRequestError, NotFoundError
 from app.models.enums import BoardType, IssueChangeKind, IssueStatus, PostStatus
 from app.models.issue import Issue, IssueMember, IssueRevision, UserIssueSeen
 from app.models.post import Post
@@ -30,6 +30,11 @@ _CHANGE_STATE_TO_KIND = {
     "duplicates_only": IssueChangeKind.duplicates,
 }
 _QUIET_KINDS = (IssueChangeKind.first_report, IssueChangeKind.admin_adjust)
+
+
+def _aware(dt: datetime) -> datetime:
+    """SQLite drops tzinfo on round-trip; PostgreSQL keeps it. Normalize to UTC-aware."""
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 def _derive_change_state(kind: IssueChangeKind | None) -> str:
@@ -367,3 +372,116 @@ class IssueService:
         else:
             seen.last_seen_at = now
         self.db.commit()
+
+    def _load_admin_issue(self, user: User, issue_id: UUID) -> Issue:
+        row = self.db.get(Issue, issue_id)
+        if not row or row.organization_id != user.organization_id or row.status == IssueStatus.merged:
+            raise NotFoundError("Issue not found")
+        return row
+
+    def _recount(self, issue: Issue) -> None:
+        member_count = (
+            self.db.scalar(
+                select(func.count()).select_from(IssueMember).where(IssueMember.issue_id == issue.id)
+            )
+            or 0
+        )
+        source_count = (
+            self.db.scalar(
+                select(func.count(func.distinct(Post.source_id)))
+                .select_from(IssueMember)
+                .join(Post, Post.id == IssueMember.post_id)
+                .where(IssueMember.issue_id == issue.id)
+            )
+            or 0
+        )
+        issue.member_count = member_count
+        issue.source_count = source_count
+
+    def merge_issue(self, user: User, issue_id: UUID, merge_with: UUID) -> IssueRead:
+        if issue_id == merge_with:
+            raise BadRequestError("자기 자신과는 병합할 수 없습니다.")
+        target = self._load_admin_issue(user, issue_id)
+        source = self._load_admin_issue(user, merge_with)
+
+        self.db.execute(
+            update(IssueMember).where(IssueMember.issue_id == source.id).values(issue_id=target.id)
+        )
+        source.status = IssueStatus.merged
+        source.merged_into_id = target.id
+        now = datetime.now(timezone.utc)
+        target.last_activity_at = max(_aware(target.last_activity_at), _aware(source.last_activity_at), now)
+        target.last_change_kind = IssueChangeKind.admin_adjust
+        self.db.flush()
+        self._recount(target)
+        self.db.add(
+            IssueRevision(
+                issue_id=target.id,
+                kind=IssueChangeKind.admin_adjust,
+                headline=f'"{source.title}" 이슈를 병합',
+                actor_user_id=user.id,
+                occurred_at=now,
+            )
+        )
+        self.db.commit()
+        return self.get_issue(user, target.id)
+
+    def split_issue(self, user: User, issue_id: UUID, post_id: UUID) -> IssueRead:
+        source = self._load_admin_issue(user, issue_id)
+        member = self.db.scalar(
+            select(IssueMember).where(
+                IssueMember.issue_id == source.id, IssueMember.post_id == post_id
+            )
+        )
+        if not member:
+            raise NotFoundError("Issue member not found")
+
+        member_count = (
+            self.db.scalar(
+                select(func.count()).select_from(IssueMember).where(IssueMember.issue_id == source.id)
+            )
+            or 0
+        )
+        if member_count < 2:
+            raise BadRequestError("구성 기사가 2건 미만이라 분리할 수 없습니다.")
+
+        post = self.db.get(Post, post_id)
+        now = datetime.now(timezone.utc)
+        new_issue = Issue(
+            organization_id=source.organization_id,
+            edition_id=source.edition_id,
+            title=post.title,
+            status=IssueStatus.active,
+            first_seen_at=post.published_at or now,
+            last_activity_at=now,
+            last_change_kind=IssueChangeKind.first_report,
+        )
+        self.db.add(new_issue)
+        self.db.flush()
+
+        member.issue_id = new_issue.id
+        source.last_change_kind = IssueChangeKind.admin_adjust
+        self.db.flush()
+        self._recount(source)
+        self._recount(new_issue)
+
+        self.db.add(
+            IssueRevision(
+                issue_id=source.id,
+                kind=IssueChangeKind.admin_adjust,
+                headline=f'"{post.title}" 기사를 새 이슈로 분리',
+                actor_user_id=user.id,
+                occurred_at=now,
+            )
+        )
+        self.db.add(
+            IssueRevision(
+                issue_id=new_issue.id,
+                kind=IssueChangeKind.first_report,
+                headline=post.title,
+                post_id=post.id,
+                occurred_at=post.published_at or now,
+            )
+        )
+        self.db.commit()
+        return self.get_issue(user, new_issue.id)

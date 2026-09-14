@@ -5,14 +5,17 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.permissions import require_admin
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.common import PaginatedResponse
 from app.schemas.issue import (
     IssueChangesResponse,
     IssueListItem,
+    IssueMergeRequest,
     IssueRead,
     IssueRevisionRead,
+    IssueSplitRequest,
     TrackingUpdateRequest,
     TrackingUpdateResponse,
 )
@@ -85,3 +88,23 @@ def mark_issue_seen(
 ):
     IssueService(db).mark_seen(user, issue_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{issue_id}/merge", response_model=IssueRead)
+def merge_issue(
+    issue_id: UUID,
+    data: IssueMergeRequest,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    return IssueService(db).merge_issue(user, issue_id, data.merge_with)
+
+
+@router.post("/{issue_id}/split", response_model=IssueRead)
+def split_issue(
+    issue_id: UUID,
+    data: IssueSplitRequest,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    return IssueService(db).split_issue(user, issue_id, data.post_id)
