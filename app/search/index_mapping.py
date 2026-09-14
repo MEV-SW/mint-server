@@ -6,6 +6,8 @@ from functools import lru_cache
 from app.core.config import get_settings
 from app.search.es_client import get_es_client
 
+_EMBEDDING_DIMS = get_settings().bedrock_embedding_dims
+
 logger = logging.getLogger(__name__)
 
 _TEXT_FIELD_NAMES = ("title", "summary", "impact", "body", "source_name")
@@ -28,6 +30,12 @@ def _text_properties(analyzer: str) -> dict:
         "reliability_score": {"type": "integer"},
         "has_ai_summary": {"type": "boolean"},
         "indexed_at": {"type": "date"},
+        "embedding": {
+            "type": "dense_vector",
+            "dims": _EMBEDDING_DIMS,
+            "index": True,
+            "similarity": "cosine",
+        },
     }
     for name in _TEXT_FIELD_NAMES:
         if name == "title":
