@@ -32,6 +32,7 @@ def list_issues(
     edition_id: UUID | None = None,
     change_state: str | None = None,
     include_series: bool = Query(False),
+    q: str | None = Query(None, description="제목 부분 검색 (관리자 병합·분리 화면)"),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -43,6 +44,7 @@ def list_issues(
         edition_id=edition_id,
         change_state=change_state,
         include_series=include_series,
+        search=q,
     )
 
 
