@@ -68,9 +68,12 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="cohere.embed-multilingual-v3")
     ap.add_argument("--region", default=None, help="override AWS_REGION for this call")
+    ap.add_argument("--corpus", default="corpus.jsonl", help="input filename under data/")
+    ap.add_argument("--tag", default="", help="output filename prefix, e.g. 'op' -> op_embeddings.npy")
     args = ap.parse_args()
+    prefix = f"{args.tag}_" if args.tag else ""
 
-    rows = [json.loads(line) for line in (DATA / "corpus.jsonl").read_text(encoding="utf-8").splitlines() if line]
+    rows = [json.loads(line) for line in (DATA / args.corpus).read_text(encoding="utf-8").splitlines() if line]
     texts = [embed_text(r) for r in rows]
     print(f"embedding {len(texts)} articles with {args.model}"
           + (f" in {args.region}" if args.region else ""))
@@ -92,16 +95,16 @@ def main() -> int:
     norms[norms == 0] = 1.0
     mat = mat / norms
 
-    np.save(DATA / "embeddings.npy", mat)
-    (DATA / "embed_ids.json").write_text(
+    np.save(DATA / f"{prefix}embeddings.npy", mat)
+    (DATA / f"{prefix}embed_ids.json").write_text(
         json.dumps([r["id"] for r in rows], ensure_ascii=False), encoding="utf-8"
     )
-    (DATA / "embed_meta.json").write_text(
+    (DATA / f"{prefix}embed_meta.json").write_text(
         json.dumps({"model": args.model, "region": args.region or settings.aws_region,
                     "count": len(rows), "dim": int(mat.shape[1])}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    print(f"\nsaved embeddings [{mat.shape[0]}, {mat.shape[1]}] -> {DATA / 'embeddings.npy'}")
+    print(f"\nsaved embeddings [{mat.shape[0]}, {mat.shape[1]}] -> {DATA / f'{prefix}embeddings.npy'}")
     return 0
 
 
