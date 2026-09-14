@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.config import get_settings
-from app.core.permissions import require_admin, require_edition_editor_any
+from app.core.permissions import require_admin, require_edition_editor_any, require_source_reviewer
 from app.core.security import get_current_user
 from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError, ServiceUnavailableError
 from app.models.enums import Importance, JobType, KeywordMatchMethod, KeywordStatus, ReviewQueueStatus
@@ -203,7 +203,7 @@ def delete_category(
 def suggest_category_sources(
     category_id: UUID,
     data: SourceSuggestRequest,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_source_reviewer),
     db: Session = Depends(get_db),
 ):
     from app.services.llm_client import get_llm_client
@@ -235,7 +235,7 @@ def suggest_category_sources(
 def approve_category_source_suggestion(
     category_id: UUID,
     data: SourceApproveRequest,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_source_reviewer),
     db: Session = Depends(get_db),
 ):
     from app.services.source_service import SourceService
