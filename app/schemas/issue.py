@@ -63,6 +63,7 @@ class IssueRevisionRead(BaseModel):
     post_id: UUID | None
     post_title: str | None
     source_name: str | None
+    original_url: str | None
     duplicate_post_ids: list[str] | None
     actor: RevisionActor | None
     occurred_at: datetime

@@ -270,6 +270,7 @@ class IssueService:
                     post_id=r.post_id,
                     post_title=post.title if post else None,
                     source_name=source.name if source else None,
+                    original_url=post.original_url if post else None,
                     duplicate_post_ids=[str(pid) for pid in r.duplicate_post_ids] if r.duplicate_post_ids else None,
                     actor=RevisionActor(user_id=actor.id, name=actor.name) if actor else None,
                     occurred_at=r.occurred_at,

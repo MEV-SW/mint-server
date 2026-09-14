@@ -206,6 +206,7 @@
   "post_id": "bb22...",
   "post_title": "\"트럼프, 中 전기차에 미국 문 여나\"",
   "source_name": "오토헤럴드",
+  "original_url": "https://...",
   "duplicate_post_ids": null,
   "actor": null,
   "occurred_at": "2026-09-09T08:20:00Z",
