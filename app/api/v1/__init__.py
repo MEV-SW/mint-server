@@ -11,6 +11,7 @@ from app.api.v1 import (
     editions,
     health,
     inquiries,
+    issues,
     jobs,
     media_files,
     personalization,
@@ -23,6 +24,7 @@ from app.api.v1 import (
     tts,
     users,
 )
+from app.core.config import get_settings
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(health.router, tags=["health"])
@@ -41,3 +43,5 @@ api_router.include_router(personalization.router, tags=["personalization"])
 api_router.include_router(editions.router, prefix="/editions", tags=["editions"])
 api_router.include_router(tts.router, prefix="/tts", tags=["tts"])
 api_router.include_router(media_files.router, prefix="/files", tags=["media"])
+if get_settings().issue_radar_enabled:
+    api_router.include_router(issues.router, prefix="/issues", tags=["issues"])

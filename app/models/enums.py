@@ -147,3 +147,29 @@ class ReviewQueueStatus(str, enum.Enum):
 class SearchIndexAction(str, enum.Enum):
     index = "index"
     delete = "delete"
+
+
+class IssueStatus(str, enum.Enum):
+    active = "active"
+    series = "series"
+    merged = "merged"
+
+
+class IssueMemberRole(str, enum.Enum):
+    origin = "origin"
+    development = "development"
+    duplicate = "duplicate"
+
+
+class IssueChangeKind(str, enum.Enum):
+    first_report = "first_report"
+    development = "development"
+    duplicates = "duplicates"
+    correction = "correction"
+    admin_adjust = "admin_adjust"
+
+
+class IssueFactType(str, enum.Enum):
+    fact = "fact"
+    ai_interpretation = "ai_interpretation"
+    needs_check = "needs_check"
