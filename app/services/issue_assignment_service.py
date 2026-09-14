@@ -29,9 +29,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.enums import IssueChangeKind, IssueMemberRole, IssueStatus
+from app.models.enums import IssueChangeKind, IssueFactType, IssueMemberRole, IssueStatus
 from app.models.issue import Issue, IssueMember, IssueRevision
 from app.models.post import Post
+from app.search.post_content import get_post_content
 from app.search.post_search import get_post_embedding, knn_similar_post_ids
 from app.services.issue_service import recount_issue
 
@@ -110,6 +111,15 @@ class IssueAssignmentService:
     def _join_issue(
         self, post: Post, issue: Issue, score: float, role: IssueMemberRole, kind: IssueChangeKind
     ) -> None:
+        headline = post.title
+        fact_type: IssueFactType | None = None
+        note = ""
+        if kind == IssueChangeKind.development:
+            # near-dup(duplicates)은 B2 임계값만으로 이미 "중복으로 접힘" —
+            # AI 분류(B5)는 실질 변화(development) 판정에서만 돌린다.
+            headline, note, fact_type = self._classify_change(post, issue)
+            issue.summary = headline  # "AI 요약(B5가 갱신)" — 최신 전개로 갱신
+
         self.db.add(
             IssueMember(issue_id=issue.id, post_id=post.id, role=role, similarity=score)
         )
@@ -117,8 +127,11 @@ class IssueAssignmentService:
             IssueRevision(
                 issue_id=issue.id,
                 kind=kind,
+                fact_type=fact_type,
+                headline=headline,
+                note=note,
                 post_id=post.id,
-                headline=post.title,
+                prompt_version="issue_change_v1" if kind == IssueChangeKind.development else "",
                 occurred_at=post.published_at,
             )
         )
@@ -128,6 +141,25 @@ class IssueAssignmentService:
         self.db.flush()
         recount_issue(self.db, issue)
         self._apply_series_guard(issue)
+
+    def _classify_change(self, post: Post, issue: Issue) -> tuple[str, str, IssueFactType | None]:
+        """B5 — ask the LLM what this development adds to the issue. Falls back
+        to the plain post title (no fact_type) on any failure — assignment
+        must not fail just because classification did."""
+        try:
+            from app.services.llm_client import get_llm_client
+
+            content = get_post_content(self.db, post.id)
+            result = get_llm_client().classify_issue_change(
+                issue.title, issue.summary or "", post.title, content.body or ""
+            )
+            headline = (result.get("headline") or post.title).strip()[:512]
+            note = (result.get("note") or "").strip()
+            fact_type = IssueFactType(result.get("fact_type")) if result.get("fact_type") else None
+            return headline, note, fact_type
+        except Exception as exc:
+            logger.warning("issue change classification failed for post %s: %s", post.id, exc)
+            return post.title, "", None
         self.db.commit()
 
     def _create_issue(self, post: Post) -> Issue:
