@@ -26,6 +26,18 @@ def _story_scene_user(title: str, summary: str, body: str = "") -> str:
     )
 
 
+def _issue_change_user(issue_title: str, issue_summary: str, new_title: str, new_body: str) -> str:
+    return json.dumps(
+        {
+            "issue_title": (issue_title or "")[:220],
+            "issue_summary": (issue_summary or "")[:800],
+            "new_title": (new_title or "")[:220],
+            "new_body": (new_body or "")[:8000],
+        },
+        ensure_ascii=False,
+    )
+
+
 def _source_suggest_user(category_name: str, *, industry: str, count: int, existing_urls: list[str]) -> str:
     return json.dumps(
         {
@@ -112,6 +124,12 @@ class LLMClient(ABC):
     def suggest_sources(
         self, category_name: str, *, industry: str, count: int, existing_urls: list[str]
     ) -> list[dict]:
+        ...
+
+    @abstractmethod
+    def classify_issue_change(
+        self, issue_title: str, issue_summary: str, new_title: str, new_body: str
+    ) -> dict:
         ...
 
 
@@ -251,6 +269,19 @@ class BedrockClient(LLMClient):
         user = _source_suggest_user(category_name, industry=industry, count=count, existing_urls=existing_urls)
         result = _parse_json(self._generate(self.summary_model, system, user, json_mode=True))
         return result.get("candidates") or []
+
+    def classify_issue_change(
+        self, issue_title: str, issue_summary: str, new_title: str, new_body: str
+    ) -> dict:
+        system = _load_prompt("issue_change_classify_v1.md")
+        user = _issue_change_user(issue_title, issue_summary, new_title, new_body)
+        return self._generate_json_korean(
+            self.summary_model,
+            system,
+            user,
+            string_fields=("headline", "note"),
+            list_fields=(),
+        )
 
     def generate_daily_report(
         self, posts: list[dict], report_date: date, *, edition: dict | None = None
@@ -428,6 +459,19 @@ class GeminiClient(LLMClient):
         result = _parse_json(self._generate(self.summary_model, system, user, json_mode=True))
         return result.get("candidates") or []
 
+    def classify_issue_change(
+        self, issue_title: str, issue_summary: str, new_title: str, new_body: str
+    ) -> dict:
+        system = _load_prompt("issue_change_classify_v1.md")
+        user = _issue_change_user(issue_title, issue_summary, new_title, new_body)
+        return self._generate_json_korean(
+            self.summary_model,
+            system,
+            user,
+            string_fields=("headline", "note"),
+            list_fields=(),
+        )
+
     def generate_daily_report(
         self, posts: list[dict], report_date: date, *, edition: dict | None = None
     ) -> dict:
@@ -601,6 +645,17 @@ class MockLLMClient(LLMClient):
         ]
         existing = set(existing_urls)
         return [c for c in candidates if c["url"] not in existing]
+
+    def classify_issue_change(
+        self, issue_title: str, issue_summary: str, new_title: str, new_body: str
+    ) -> dict:
+        blob = (new_body or "").strip()
+        fact_type = "needs_check" if any(ch.isdigit() for ch in new_title) and not blob else "fact"
+        return {
+            "headline": f"{new_title[:60]}",
+            "note": f"\"{issue_title}\" 사건에 새 기사가 더해졌습니다(모의 응답).",
+            "fact_type": fact_type,
+        }
 
     def generate_daily_report(
         self, posts: list[dict], report_date: date, *, edition: dict | None = None
