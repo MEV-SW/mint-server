@@ -124,6 +124,7 @@
   - `edition_id` UUID 선택 — 특정 분야만.
   - `change_state` 문자열 선택 — `development` / `correction` / `duplicates_only` / `quiet` 중 하나. `issue.last_change_kind`와 `last_activity_at` 기준 파생.
   - `include_series` boolean 기본 false.
+  - `q` 문자열 선택 — 제목 부분 검색(대소문자 무시). [B6](https://github.com/MEV-SW/mint-server/issues/33)에서 관리자 병합·분리 화면의 이슈 검색용으로 추가.
 - 정렬: `last_activity_at` 내림차순 고정.
 - Response 200: 기존 `PaginatedResponse` 형태.
 ```json

@@ -88,11 +88,14 @@ class IssueService:
         edition_id: UUID | None = None,
         change_state: str | None = None,
         include_series: bool = False,
+        search: str | None = None,
     ) -> PaginatedResponse[IssueListItem]:
         visible = self._visible_edition_ids(user)
         q = self._base_query(user, include_series=include_series)
         if edition_id is not None:
             q = q.where(Issue.edition_id == edition_id)
+        if search:
+            q = q.where(Issue.title.ilike(f"%{search.strip()}%"))
         if change_state is not None:
             if change_state == "quiet":
                 q = q.where(
