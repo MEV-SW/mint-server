@@ -690,6 +690,13 @@ class CrawlerService:
             merge_existing=False,
         )
 
+        try:
+            from app.services.issue_assignment_service import IssueAssignmentService
+
+            IssueAssignmentService(self.db).assign_post(post)
+        except Exception as exc:  # noqa: BLE001 — issue radar is additive, never blocks crawl
+            logger.warning("issue assignment failed for post %s: %s", post.id, exc)
+
         return needs_review
 
     def _crawl_rss(
