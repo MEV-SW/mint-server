@@ -56,6 +56,13 @@ class Settings(BaseSettings):
     report_illustration_enabled: bool = True
     personalization_enabled: bool = False
     issue_radar_enabled: bool = False
+    # PROVISIONAL — from B2 experiment (RSS snapshot, no ground-truth labels),
+    # not yet confirmed by B3's operational-sample labeling. Safe to change via
+    # env without a code change once B3's calibrate_thresholds.py is committed.
+    # See scripts/experiments/issue_clustering/README.md.
+    issue_near_dup_cosine: float = 0.90
+    issue_event_cosine: float = 0.84
+    issue_window_days: int = 7
     classification_confidence_threshold: float = 0.6
 
     # Server TTS was Gemini-only. Off by default on Bedrock; browser SpeechSynthesis still works.

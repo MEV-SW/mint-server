@@ -37,6 +37,26 @@ def _aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
+def recount_issue(db: Session, issue: Issue) -> None:
+    """Recompute member_count/source_count from actual issue_members. Shared by
+    IssueService (merge/split) and IssueAssignmentService (B4, new members)."""
+    member_count = (
+        db.scalar(select(func.count()).select_from(IssueMember).where(IssueMember.issue_id == issue.id))
+        or 0
+    )
+    source_count = (
+        db.scalar(
+            select(func.count(func.distinct(Post.source_id)))
+            .select_from(IssueMember)
+            .join(Post, Post.id == IssueMember.post_id)
+            .where(IssueMember.issue_id == issue.id)
+        )
+        or 0
+    )
+    issue.member_count = member_count
+    issue.source_count = source_count
+
+
 def _derive_change_state(kind: IssueChangeKind | None) -> str:
     if kind == IssueChangeKind.development:
         return "development"
@@ -384,23 +404,7 @@ class IssueService:
         return row
 
     def _recount(self, issue: Issue) -> None:
-        member_count = (
-            self.db.scalar(
-                select(func.count()).select_from(IssueMember).where(IssueMember.issue_id == issue.id)
-            )
-            or 0
-        )
-        source_count = (
-            self.db.scalar(
-                select(func.count(func.distinct(Post.source_id)))
-                .select_from(IssueMember)
-                .join(Post, Post.id == IssueMember.post_id)
-                .where(IssueMember.issue_id == issue.id)
-            )
-            or 0
-        )
-        issue.member_count = member_count
-        issue.source_count = source_count
+        recount_issue(self.db, issue)
 
     def merge_issue(self, user: User, issue_id: UUID, merge_with: UUID) -> IssueRead:
         if issue_id == merge_with:
