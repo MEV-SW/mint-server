@@ -16,6 +16,7 @@ from app.models.personalization import Keyword, PostKeyword
 from app.models.post import Post
 from app.search.es_client import get_es_client
 from app.search.index_mapping import ensure_posts_index
+from app.services.embedding_client import embed_text, post_embedding_text
 
 logger = logging.getLogger(__name__)
 
@@ -236,6 +237,7 @@ def _build_index_document(
         "reliability_score": post.reliability_score,
         "has_ai_summary": content.has_summary,
         "indexed_at": datetime.now(timezone.utc),
+        "embedding": embed_text(post_embedding_text(post.title, content.summary or "")),
     }
 
 
@@ -287,8 +289,8 @@ def save_post_content(
     if post.source is None and post.source_id:
         db.refresh(post, attribute_names=["source"])
 
-    doc = _build_index_document(db, post, content)
     try:
+        doc = _build_index_document(db, post, content)
         client.index(
             index=settings.elasticsearch_index_posts,
             id=str(post.id),

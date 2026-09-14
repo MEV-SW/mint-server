@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     bedrock_image_model: str = "amazon.nova-canvas-v1:0"
     # Image models may only exist in another region (e.g. Stability in us-west-2).
     bedrock_image_region: str = ""
+    # Embedding model (issue radar / posts semantic index). Cohere is us-east-1 only initially.
+    bedrock_embedding_model: str = "cohere.embed-multilingual-v3"
+    bedrock_embedding_region: str = "us-east-1"
+    bedrock_embedding_dims: int = 1024
 
     # Legacy Gemini (kept for optional rollback / TTS).
     gemini_api_key: str = ""
