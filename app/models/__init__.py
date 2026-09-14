@@ -2,6 +2,7 @@ from app.models.background_job import BackgroundJob
 from app.models.ai_output import AIOutput
 from app.models.daily_report import DailyReport, DailyReportItem
 from app.models.inquiry import Inquiry, InquiryMessage
+from app.models.issue import Issue, IssueMember, IssueRevision, UserIssueSeen
 from app.models.notification_log import NotificationLog
 from app.models.edition import Edition, SourceEdition, UserEdition
 from app.models.organization import Organization
@@ -39,6 +40,10 @@ __all__ = [
     "NotificationLog",
     "Inquiry",
     "InquiryMessage",
+    "Issue",
+    "IssueMember",
+    "IssueRevision",
+    "UserIssueSeen",
     "NewsCategory",
     "Keyword",
     "UserKeywordSubscription",

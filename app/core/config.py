@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     gemini_image_model: str = "gemini-2.5-flash-image"
     report_illustration_enabled: bool = True
     personalization_enabled: bool = False
+    issue_radar_enabled: bool = False
     classification_confidence_threshold: float = 0.6
 
     # Server TTS was Gemini-only. Off by default on Bedrock; browser SpeechSynthesis still works.
