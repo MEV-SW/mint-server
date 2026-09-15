@@ -38,6 +38,16 @@ def _issue_change_user(issue_title: str, issue_summary: str, new_title: str, new
     )
 
 
+def _pair_relation_user(a_title: str, a_summary: str, b_title: str, b_summary: str) -> str:
+    return json.dumps(
+        {
+            "a": {"title": (a_title or "")[:220], "summary": (a_summary or "")[:600]},
+            "b": {"title": (b_title or "")[:220], "summary": (b_summary or "")[:600]},
+        },
+        ensure_ascii=False,
+    )
+
+
 def _source_suggest_user(category_name: str, *, industry: str, count: int, existing_urls: list[str]) -> str:
     return json.dumps(
         {
@@ -129,6 +139,12 @@ class LLMClient(ABC):
     @abstractmethod
     def classify_issue_change(
         self, issue_title: str, issue_summary: str, new_title: str, new_body: str
+    ) -> dict:
+        ...
+
+    @abstractmethod
+    def classify_pair_relation(
+        self, a_title: str, a_summary: str, b_title: str, b_summary: str
     ) -> dict:
         ...
 
@@ -280,6 +296,19 @@ class BedrockClient(LLMClient):
             system,
             user,
             string_fields=("headline", "note"),
+            list_fields=(),
+        )
+
+    def classify_pair_relation(
+        self, a_title: str, a_summary: str, b_title: str, b_summary: str
+    ) -> dict:
+        system = _load_prompt("pair_relation_classify_v1.md")
+        user = _pair_relation_user(a_title, a_summary, b_title, b_summary)
+        return self._generate_json_korean(
+            self.summary_model,
+            system,
+            user,
+            string_fields=("label", "reason"),
             list_fields=(),
         )
 
@@ -472,6 +501,19 @@ class GeminiClient(LLMClient):
             list_fields=(),
         )
 
+    def classify_pair_relation(
+        self, a_title: str, a_summary: str, b_title: str, b_summary: str
+    ) -> dict:
+        system = _load_prompt("pair_relation_classify_v1.md")
+        user = _pair_relation_user(a_title, a_summary, b_title, b_summary)
+        return self._generate_json_korean(
+            self.summary_model,
+            system,
+            user,
+            string_fields=("label", "reason"),
+            list_fields=(),
+        )
+
     def generate_daily_report(
         self, posts: list[dict], report_date: date, *, edition: dict | None = None
     ) -> dict:
@@ -656,6 +698,15 @@ class MockLLMClient(LLMClient):
             "note": f"\"{issue_title}\" 사건에 새 기사가 더해졌습니다(모의 응답).",
             "fact_type": fact_type,
         }
+
+    def classify_pair_relation(
+        self, a_title: str, a_summary: str, b_title: str, b_summary: str
+    ) -> dict:
+        a_tokens = set((a_title or "").split())
+        b_tokens = set((b_title or "").split())
+        overlap = a_tokens & b_tokens
+        label = "event" if len(overlap) >= 2 else "unrelated"
+        return {"label": label, "reason": f"제목 공통 단어(모의 응답): {sorted(overlap)}"}
 
     def generate_daily_report(
         self, posts: list[dict], report_date: date, *, edition: dict | None = None
