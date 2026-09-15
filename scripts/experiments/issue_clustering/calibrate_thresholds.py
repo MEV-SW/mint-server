@@ -55,10 +55,19 @@ def main() -> int:
     prefix = f"{args.tag}_" if args.tag else ""
 
     labels_path = DATA / f"{prefix}labels.jsonl"
-    labels = [
-        json.loads(line) for line in labels_path.read_text(encoding="utf-8").splitlines()
-        if line and json.loads(line)["label"] != "skip"
-    ]
+    # last write wins per (a_id, b_id) — a human override (label_cli.py --review)
+    # appends a new row rather than editing the AI pre-label in place.
+    latest: dict[tuple[str, str], dict] = {}
+    for line in labels_path.read_text(encoding="utf-8").splitlines():
+        if not line:
+            continue
+        row = json.loads(line)
+        latest[(row["a_id"], row["b_id"])] = row
+    labels = [row for row in latest.values() if row["label"] != "skip"]
+    ai_only = sum(1 for row in labels if row.get("source") == "ai")
+    if ai_only:
+        print(f"주의: {ai_only}개는 AI 예비 라벨이 사람 검토 없이 그대로 쓰였습니다 "
+              f"(label_cli.py --tag {args.tag} --review로 검토 권장)\n")
     counts = {}
     for row in labels:
         counts[row["label"]] = counts.get(row["label"], 0) + 1

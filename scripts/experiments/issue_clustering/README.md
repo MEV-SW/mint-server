@@ -75,3 +75,25 @@ cd MINT_Backend
 
 `fetch_operational_sample.py`는 `.env`의 `DATABASE_URL`(운영 DB일 수 있음)을 읽기 전용으로 조회한다 — 쓰기 없음.
 라벨링(`label_cli.py`) 자체는 사람이 해야 한다 — "담당자가 수치 합격선을 정한다(임의 수치 아님)"가 B3의 완료 판정 기준이다.
+
+### AI 예비 라벨 + 사람 검토 (선택)
+
+150개 가까운 쌍을 전부 처음부터 사람이 라벨링하는 대신, LLM이 먼저 라벨을 붙이고
+사람은 승인/정정만 하는 방식도 쓸 수 있다. **이건 B3가 원래 전제한 "AI가 AI를 채점하지
+않는다" 보장을 약화시키는 절충이다** — 최종 임계값 확정(`calibrate_thresholds.py --commit`)
+전에 반드시 사람이 실제로 결과를 훑어봐야 한다는 점은 그대로 유지된다.
+
+```
+auto_label.py                LLM이 후보쌍을 예비 라벨링 → data/op_labels.jsonl (source: "ai")
+label_cli.py --review        사람이 AI 라벨을 하나씩 승인/정정 (source: "human_confirmed"/"human")
+calibrate_thresholds.py      동일 (a_id, b_id) 쌍은 마지막 라벨(사람의 정정)만 채택 — last write wins
+```
+
+```bash
+.venv/bin/python scripts/experiments/issue_clustering/auto_label.py --tag op
+.venv/bin/python scripts/experiments/issue_clustering/label_cli.py --tag op --review
+```
+
+`auto_label.py`가 쓰는 프롬프트([`pair_relation_classify_v1.md`](../../../app/prompts/pair_relation_classify_v1.md))는
+기본값을 unrelated로 두고 회사명·제품명 등 구체적 개체가 겹칠 때만 near_dup/event를 고려하도록
+보수적으로 설계했다 — 같은 업계·주제라는 이유만으로 관련 있다고 판단하지 않는다.
