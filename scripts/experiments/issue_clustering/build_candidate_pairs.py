@@ -89,6 +89,11 @@ def main() -> int:
         picked.extend(take)
         print(f"  [{lo:.2f}, {hi:.2f}): {len(pool)} available, took {len(take)}")
 
+    # interleave difficulty — without this, low-similarity buckets (mostly
+    # unrelated by construction) all come first and the labeler burns through
+    # 20+ obvious "unrelated" pairs before ever seeing a near-dup/event one.
+    random.shuffle(picked)
+
     out_path = DATA / f"{prefix}candidates.jsonl"
     with out_path.open("w", encoding="utf-8") as f:
         for i, j, score in picked:
