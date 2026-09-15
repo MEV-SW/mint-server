@@ -1774,6 +1774,7 @@ class PersonalizedNewsService:
             user,
             personalized=False,
             keyword_ids=featured_ids,
+            content_kind="news",
             page=page,
             size=size,
             recency=True,
