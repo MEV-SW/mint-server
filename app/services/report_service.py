@@ -290,7 +290,9 @@ class ReportService:
                 "topics": topic_terms[:40],
             }
         result = client.generate_daily_report(payload, target, edition=edition_payload)
-        normalized = self._normalize_report_result(result, target)
+        normalized = self._normalize_report_result(
+            result, target, organization_id=organization_id, edition_id=edition_id, since=start
+        )
         edition_name = edition.name if edition is not None else None
         normalized["title"] = format_report_title(target, edition_name)
 
@@ -575,19 +577,43 @@ class ReportService:
             report.illustration_url = illustration_url
             self.db.commit()
 
-    def _normalize_report_result(self, result: dict, target: date) -> dict:
+    def _normalize_report_result(
+        self,
+        result: dict,
+        target: date,
+        *,
+        organization_id: UUID | None = None,
+        edition_id: UUID | None = None,
+        since: datetime | None = None,
+    ) -> dict:
         recs = result.get("recommendations") or result.get("key_changes") or []
         key_changes = []
+        post_to_issue = self._changed_post_to_issue_map(
+            organization_id, edition_id=edition_id, since=since
+        )
         for rec in recs[:8]:
             why = (rec.get("why_read") or rec.get("description") or "").strip()
-            key_changes.append(
-                {
-                    "title": (rec.get("title") or "").strip()[:120],
-                    "description": why[:200],
-                    "related_post_ids": rec.get("related_post_ids") or [],
-                    "importance": rec.get("importance") or "medium",
-                }
-            )
+            related_post_ids = rec.get("related_post_ids") or []
+            related_issue_ids = []
+            if post_to_issue:
+                matched: set[str] = set()
+                for pid in related_post_ids:
+                    try:
+                        issue_id = post_to_issue.get(UUID(str(pid)))
+                    except (ValueError, AttributeError):
+                        continue
+                    if issue_id is not None:
+                        matched.add(str(issue_id))
+                related_issue_ids = sorted(matched)
+            item = {
+                "title": (rec.get("title") or "").strip()[:120],
+                "description": why[:200],
+                "related_post_ids": related_post_ids,
+                "importance": rec.get("importance") or "medium",
+            }
+            if related_issue_ids:
+                item["related_issue_ids"] = related_issue_ids
+            key_changes.append(item)
 
         risks = result.get("risks")
         if isinstance(risks, list):
@@ -609,6 +635,25 @@ class ReportService:
             "risks": risks,
             "action_items": action_items,
         }
+
+    def _changed_post_to_issue_map(
+        self,
+        organization_id: UUID | None,
+        *,
+        edition_id: UUID | None,
+        since: datetime | None,
+    ) -> dict[UUID, UUID]:
+        """오늘 변화가 있었던 이슈들의 post_id → issue_id 맵 (#34 기술스펙).
+
+        issue_radar_enabled가 꺼져 있으면 빈 맵 — 리포트 동작은 오늘과 동일.
+        """
+        if organization_id is None or since is None or not get_settings().issue_radar_enabled:
+            return {}
+        from app.services.issue_service import IssueService
+
+        issue_svc = IssueService(self.db)
+        changes = issue_svc.list_org_changes(organization_id, edition_id=edition_id, since=since)
+        return issue_svc.post_id_to_issue_id([c.id for c in changes])
 
     def _create_empty_report(
         self, organization_id: UUID, target: date, *, edition_id: UUID | None = None
