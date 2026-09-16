@@ -10,4 +10,4 @@
 | [#33](https://github.com/MEV-SW/mint-server/issues/33) | 이슈병합분리 | 2026-09 | 구현 완료 | [API스펙](33-이슈병합분리/API스펙_이슈병합분리.md) · [기술스펙](33-이슈병합분리/기술스펙_이슈병합분리.md) |
 | [#31](https://github.com/MEV-SW/mint-server/issues/31) | 사건자동배정 | 2026-09 | 구현 완료(임계값 B3 확정) | [API스펙](31-사건자동배정/API스펙_사건자동배정.md) · [기술스펙](31-사건자동배정/기술스펙_사건자동배정.md) |
 | [#32](https://github.com/MEV-SW/mint-server/issues/32) | 변화분류 | 2026-09 | 구현 완료 | [API스펙](32-변화분류/API스펙_변화분류.md) · [기술스펙](32-변화분류/기술스펙_변화분류.md) |
-| [#34](https://github.com/MEV-SW/mint-server/issues/34) | 추적변화피드 | 2026-09 | 스펙 작성 중 | [API스펙](34-추적변화피드/API스펙_추적변화피드.md) · [기술스펙](34-추적변화피드/기술스펙_추적변화피드.md) |
+| [#34](https://github.com/MEV-SW/mint-server/issues/34) | 추적변화피드 | 2026-09 | 구현 완료 | [API스펙](34-추적변화피드/API스펙_추적변화피드.md) · [기술스펙](34-추적변화피드/기술스펙_추적변화피드.md) |

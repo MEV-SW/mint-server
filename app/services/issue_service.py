@@ -360,6 +360,66 @@ class IssueService:
         items.sort(key=lambda i: i.last_activity_at, reverse=True)
         return IssueChangesResponse(since=since, items=items[:limit])
 
+    def list_org_changes(
+        self, organization_id: UUID, *, edition_id: UUID | None, since: datetime
+    ) -> list[IssueChangeItem]:
+        """조직·에디션 단위 변화 피드 — 개인 추적 커서(user_issue_seen) 무관.
+
+        리포트 생성 배치 전용 내부 호출. HTTP 엔드포인트 아님(#34 기술스펙).
+        """
+        issues = self.db.scalars(
+            select(Issue).where(
+                Issue.organization_id == organization_id,
+                Issue.edition_id == edition_id,
+                Issue.status == IssueStatus.active,
+                Issue.last_activity_at > since,
+            )
+        ).all()
+
+        items = []
+        for issue in issues:
+            revisions = self.db.scalars(
+                select(IssueRevision)
+                .where(IssueRevision.issue_id == issue.id)
+                .where(IssueRevision.occurred_at > since)
+                .order_by(IssueRevision.occurred_at.desc())
+            ).all()
+            top_kinds: list[str] = []
+            for r in revisions:
+                label = r.fact_type.value if r.fact_type else r.kind.value
+                if label not in top_kinds:
+                    top_kinds.append(label)
+                if len(top_kinds) == 3:
+                    break
+            new_member_ids = self.db.scalars(
+                select(IssueMember.id)
+                .where(IssueMember.issue_id == issue.id)
+                .where(IssueMember.added_at > since)
+            ).all()
+            items.append(
+                IssueChangeItem(
+                    id=issue.id,
+                    title=issue.title,
+                    edition_id=issue.edition_id,
+                    last_activity_at=issue.last_activity_at,
+                    new_revision_count=len(revisions),
+                    top_change_kinds=top_kinds,
+                    new_member_count=len(new_member_ids),
+                )
+            )
+        items.sort(key=lambda i: i.last_activity_at, reverse=True)
+        return items
+
+    def post_id_to_issue_id(self, issue_ids: list[UUID]) -> dict[UUID, UUID]:
+        if not issue_ids:
+            return {}
+        rows = self.db.execute(
+            select(IssueMember.post_id, IssueMember.issue_id).where(
+                IssueMember.issue_id.in_(issue_ids)
+            )
+        ).all()
+        return {post_id: issue_id for post_id, issue_id in rows}
+
     def update_tracking(self, user: User, issue_id: UUID, tracking: bool) -> TrackingUpdateResponse:
         row = self.db.get(Issue, issue_id)
         if (
