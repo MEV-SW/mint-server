@@ -56,10 +56,10 @@ class Settings(BaseSettings):
     report_illustration_enabled: bool = True
     personalization_enabled: bool = False
     issue_radar_enabled: bool = False
-    # PROVISIONAL — from B2 experiment (RSS snapshot, no ground-truth labels),
-    # not yet confirmed by B3's operational-sample labeling. Safe to change via
-    # env without a code change once B3's calibrate_thresholds.py is committed.
-    # See scripts/experiments/issue_clustering/README.md.
+    # Confirmed by B3 (#30) — 담당자가 운영 분포 기준 합격선으로 채택한 값.
+    # B2 실험값(RSS 스냅샷)과 동일 수치로 확정. 정식 골든셋 라벨링·CI 회귀는
+    # 생략하기로 결정 — 근거: docs/결정/결정기록_2026-09-16_B3-임계값-확정.md.
+    # Safe to change via env without a code change.
     issue_near_dup_cosine: float = 0.90
     issue_event_cosine: float = 0.84
     issue_window_days: int = 7
